@@ -24,5 +24,9 @@ RUN cd /comfyui/custom_nodes && \
     cd ComfyUI-VideoHelperSuite && pip install -r requirements.txt && \
     echo "VideoHelperSuite installed OK"
 
-# Models loaded from Network Volume at /runpod-volume/
-# Volume setup script: see download-models.sh
+# Copy startup script (auto-downloads models to Network Volume on first boot)
+COPY start.sh /custom-start.sh
+RUN chmod +x /custom-start.sh
+
+# Models auto-downloaded to Network Volume on first boot (~27GB)
+CMD ["/custom-start.sh"]
