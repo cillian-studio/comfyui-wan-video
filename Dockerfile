@@ -1,14 +1,18 @@
 FROM runpod/worker-comfyui:5.5.1-base
 
-# Install GGUF loader for quantized models (try registry name, then git URL fallback)
-RUN comfy-node-install comfyui-gguf || \
-    cd /comfyui/custom_nodes && git clone https://github.com/city96/ComfyUI-GGUF.git && \
-    cd ComfyUI-GGUF && pip install -r requirements.txt
+# Install GGUF loader — git clone directly (comfy-node-install silently fails)
+RUN cd /comfyui/custom_nodes && \
+    git clone https://github.com/city96/ComfyUI-GGUF.git && \
+    cd ComfyUI-GGUF && \
+    pip install -r requirements.txt && \
+    echo "GGUF node installed OK"
 
 # Install video helper suite for video output
-RUN comfy-node-install comfyui-videohelpersuite || \
-    cd /comfyui/custom_nodes && git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git && \
-    cd ComfyUI-VideoHelperSuite && pip install -r requirements.txt
+RUN cd /comfyui/custom_nodes && \
+    git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git && \
+    cd ComfyUI-VideoHelperSuite && \
+    pip install -r requirements.txt && \
+    echo "VideoHelperSuite installed OK"
 
 # Download Wan 2.2 I2V GGUF models (Q4_K_S for better quality, fits 24GB VRAM)
 RUN comfy model download \
