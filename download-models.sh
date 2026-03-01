@@ -1,53 +1,35 @@
 #!/bin/bash
-# Download Wan 2.2 GGUF models to Network Volume
-# Run this once on a temporary pod with the volume mounted
+# Run this on a temporary RunPod GPU Pod with Network Volume attached.
+# Downloads all LTX-2 + Wan 2.2 models to /runpod-volume/models/
+set -e
 
-MODEL_DIR="${1:-/workspace/models}"
+BASE="/runpod-volume/models"
+mkdir -p "$BASE"/{diffusion_models,text_encoders,vae,clip_vision}
 
-echo "Downloading Wan 2.2 GGUF models to $MODEL_DIR..."
+echo "=== LTX-2 Models (Video + Audio, ~27GB) ==="
 
-mkdir -p "$MODEL_DIR/diffusion_models"
-mkdir -p "$MODEL_DIR/text_encoders"
-mkdir -p "$MODEL_DIR/vae"
-mkdir -p "$MODEL_DIR/clip_vision"
+echo "[1/5] LTX-2 GGUF Q4_K_S (~12GB)..."
+wget -c -O "$BASE/diffusion_models/ltx-2-19b-dev-Q4_K_S.gguf" \
+  "https://huggingface.co/unsloth/LTX-2-GGUF/resolve/main/ltx-2-19b-dev-Q4_K_S.gguf"
 
-# Wan 2.2 I2V HighNoise GGUF (Q4_K_S — better quality than Q3)
-if [ ! -f "$MODEL_DIR/diffusion_models/Wan2.2-I2V-A14B-HighNoise-Q4_K_S.gguf" ]; then
-  echo "Downloading HighNoise model..."
-  wget -q --show-progress -O "$MODEL_DIR/diffusion_models/Wan2.2-I2V-A14B-HighNoise-Q4_K_S.gguf" \
-    "https://huggingface.co/QuantStack/Wan2.2-I2V-A14B-GGUF/resolve/main/HighNoise/Wan2.2-I2V-A14B-HighNoise-Q4_K_S.gguf"
-fi
+echo "[2/5] Gemma 3 12B FP4 Text Encoder (~9.5GB)..."
+wget -c -O "$BASE/text_encoders/gemma_3_12B_it_fp4_mixed.safetensors" \
+  "https://huggingface.co/Comfy-Org/ltx-2/resolve/main/split_files/text_encoders/gemma_3_12B_it_fp4_mixed.safetensors"
 
-# Wan 2.2 I2V LowNoise GGUF (Q4_K_S)
-if [ ! -f "$MODEL_DIR/diffusion_models/Wan2.2-I2V-A14B-LowNoise-Q4_K_S.gguf" ]; then
-  echo "Downloading LowNoise model..."
-  wget -q --show-progress -O "$MODEL_DIR/diffusion_models/Wan2.2-I2V-A14B-LowNoise-Q4_K_S.gguf" \
-    "https://huggingface.co/QuantStack/Wan2.2-I2V-A14B-GGUF/resolve/main/LowNoise/Wan2.2-I2V-A14B-LowNoise-Q4_K_S.gguf"
-fi
+echo "[3/5] Embeddings Connector (~2.9GB)..."
+wget -c -O "$BASE/text_encoders/ltx-2-19b-embeddings_connector_dev_bf16.safetensors" \
+  "https://huggingface.co/Kijai/LTXV2_comfy/resolve/main/text_encoders/ltx-2-19b-embeddings_connector_dev_bf16.safetensors"
 
-# Text encoder (UMT5-XXL fp8)
-if [ ! -f "$MODEL_DIR/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors" ]; then
-  echo "Downloading text encoder..."
-  wget -q --show-progress -O "$MODEL_DIR/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors" \
-    "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
-fi
+echo "[4/5] Video VAE (~2.5GB)..."
+wget -c -O "$BASE/vae/LTX2_video_vae_bf16.safetensors" \
+  "https://huggingface.co/Kijai/LTXV2_comfy/resolve/main/VAE/LTX2_video_vae_bf16.safetensors"
 
-# VAE
-if [ ! -f "$MODEL_DIR/vae/Wan2.1_VAE.safetensors" ]; then
-  echo "Downloading VAE..."
-  wget -q --show-progress -O "$MODEL_DIR/vae/Wan2.1_VAE.safetensors" \
-    "https://huggingface.co/QuantStack/Wan2.2-I2V-A14B-GGUF/resolve/main/VAE/Wan2.1_VAE.safetensors"
-fi
+echo "[5/5] Audio VAE (~218MB)..."
+wget -c -O "$BASE/vae/LTX2_audio_vae_bf16.safetensors" \
+  "https://huggingface.co/Kijai/LTXV2_comfy/resolve/main/VAE/LTX2_audio_vae_bf16.safetensors"
 
-# CLIP Vision
-if [ ! -f "$MODEL_DIR/clip_vision/clip_vision_h.safetensors" ]; then
-  echo "Downloading CLIP Vision..."
-  wget -q --show-progress -O "$MODEL_DIR/clip_vision/clip_vision_h.safetensors" \
-    "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/clip_vision/clip_vision_h.safetensors"
-fi
-
-echo "All models downloaded!"
-ls -lah "$MODEL_DIR"/diffusion_models/
-ls -lah "$MODEL_DIR"/text_encoders/
-ls -lah "$MODEL_DIR"/vae/
-ls -lah "$MODEL_DIR"/clip_vision/
+echo ""
+echo "=== Done ==="
+du -sh "$BASE"/*
+echo "Total:"
+du -sh "$BASE"
