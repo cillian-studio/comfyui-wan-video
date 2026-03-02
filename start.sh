@@ -1,40 +1,46 @@
 #!/bin/bash
-# Auto-download LTX-2 models to Network Volume on first boot, then symlink into ComfyUI.
+# Auto-download LTX-2 fp8 models to Network Volume on first boot, then symlink into ComfyUI.
 set -e
 
 VOLUME="/runpod-volume/models"
-MARKER="$VOLUME/.ltx2-complete"
+MARKER="$VOLUME/.ltx2-fp8-complete"
 
-# ── Step 1: Download models if not already on volume ──
+# ── Step 1: Download fp8 models if not already on volume ──
 if [ -d "/runpod-volume" ] && [ ! -f "$MARKER" ]; then
-    echo "=== First boot: downloading LTX-2 models to Network Volume (~27GB) ==="
-    mkdir -p "$VOLUME"/{diffusion_models,text_encoders,vae,clip_vision,checkpoints}
+    echo "=== First boot: downloading LTX-2 fp8 models to Network Volume (~37GB) ==="
+    mkdir -p "$VOLUME"/{checkpoints,text_encoders,loras}
 
-    echo "[1/5] LTX-2 GGUF Q4_K_S (~12GB)..."
-    wget -q --show-progress -c -O "$VOLUME/diffusion_models/ltx-2-19b-dev-Q4_K_S.gguf" \
-      "https://huggingface.co/unsloth/LTX-2-GGUF/resolve/main/ltx-2-19b-dev-Q4_K_S.gguf"
+    # Clean up old GGUF models to free space
+    echo "Cleaning old GGUF models..."
+    rm -f "$VOLUME/diffusion_models/ltx-2-19b-dev-Q4_K_S.gguf"
+    rm -f "$VOLUME/checkpoints/ltx-2-19b-embeddings_connector_dev_bf16.safetensors"
+    rm -f "$VOLUME/vae/LTX2_video_vae_bf16.safetensors"
+    rm -f "$VOLUME/vae/LTX2_audio_vae_bf16.safetensors"
+    rm -f "$VOLUME/unet/ltx-2-19b-dev-Q4_K_S.gguf"
+    rm -f "$VOLUME/.ltx2-complete"
 
-    echo "[2/5] Gemma 3 12B FP4 Text Encoder (~9.5GB)..."
-    wget -q --show-progress -c -O "$VOLUME/text_encoders/gemma_3_12B_it_fp4_mixed.safetensors" \
-      "https://huggingface.co/Comfy-Org/ltx-2/resolve/main/split_files/text_encoders/gemma_3_12B_it_fp4_mixed.safetensors"
+    echo "[1/3] LTX-2 Distilled fp8 Checkpoint (~27GB)..."
+    wget -q --show-progress -c -O "$VOLUME/checkpoints/ltx-2-19b-distilled-fp8.safetensors" \
+      "https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-19b-distilled-fp8.safetensors"
 
-    echo "[3/5] Embeddings Connector (~2.9GB)..."
-    wget -q --show-progress -c -O "$VOLUME/checkpoints/ltx-2-19b-embeddings_connector_dev_bf16.safetensors" \
-      "https://huggingface.co/Kijai/LTXV2_comfy/resolve/main/text_encoders/ltx-2-19b-embeddings_connector_dev_bf16.safetensors"
+    # Gemma text encoder — check if already exists from old setup
+    if [ ! -f "$VOLUME/text_encoders/gemma_3_12B_it_fp4_mixed.safetensors" ]; then
+        echo "[2/3] Gemma 3 12B FP4 Text Encoder (~9.5GB)..."
+        wget -q --show-progress -c -O "$VOLUME/text_encoders/gemma_3_12B_it_fp4_mixed.safetensors" \
+          "https://huggingface.co/Comfy-Org/ltx-2/resolve/main/split_files/text_encoders/gemma_3_12B_it_fp4_mixed.safetensors"
+    else
+        echo "[2/3] Gemma 3 text encoder already on volume — skipping."
+    fi
 
-    echo "[4/5] Video VAE (~2.5GB)..."
-    wget -q --show-progress -c -O "$VOLUME/vae/LTX2_video_vae_bf16.safetensors" \
-      "https://huggingface.co/Kijai/LTXV2_comfy/resolve/main/VAE/LTX2_video_vae_bf16.safetensors"
-
-    echo "[5/5] Audio VAE (~218MB)..."
-    wget -q --show-progress -c -O "$VOLUME/vae/LTX2_audio_vae_bf16.safetensors" \
-      "https://huggingface.co/Kijai/LTXV2_comfy/resolve/main/VAE/LTX2_audio_vae_bf16.safetensors"
+    echo "[3/3] Distilled LoRA (rank-384, ~7.7GB)..."
+    wget -q --show-progress -c -O "$VOLUME/loras/ltx-2-19b-distilled-lora-384.safetensors" \
+      "https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-19b-distilled-lora-384.safetensors"
 
     touch "$MARKER"
-    echo "=== All LTX-2 models downloaded ==="
-    du -sh "$VOLUME"/*
+    echo "=== All LTX-2 fp8 models downloaded ==="
+    du -sh "$VOLUME"/* 2>/dev/null || true
 elif [ -f "$MARKER" ]; then
-    echo "Models already on Network Volume."
+    echo "LTX-2 fp8 models already on Network Volume."
 else
     echo "WARNING: No Network Volume at /runpod-volume!"
 fi
@@ -42,7 +48,7 @@ fi
 # ── Step 2: Symlink models into ComfyUI directories ──
 if [ -d "$VOLUME" ]; then
     echo "Symlinking models into ComfyUI..."
-    for dir in diffusion_models text_encoders vae clip_vision checkpoints; do
+    for dir in checkpoints text_encoders loras; do
         mkdir -p "/comfyui/models/$dir"
         if [ -d "$VOLUME/$dir" ]; then
             for f in "$VOLUME/$dir"/*; do
@@ -50,19 +56,9 @@ if [ -d "$VOLUME" ]; then
             done
         fi
     done
-
-    # Cross-directory symlinks for node compatibility
-    # UnetLoaderGGUF may scan unet/ instead of diffusion_models/
-    mkdir -p /comfyui/models/unet
-    [ -f "$VOLUME/diffusion_models/ltx-2-19b-dev-Q4_K_S.gguf" ] && \
-        ln -sf "$VOLUME/diffusion_models/ltx-2-19b-dev-Q4_K_S.gguf" "/comfyui/models/unet/ltx-2-19b-dev-Q4_K_S.gguf"
-
-    # LTXVAudioVAELoader may look in checkpoints/
-    [ -f "$VOLUME/vae/LTX2_audio_vae_bf16.safetensors" ] && \
-        ln -sf "$VOLUME/vae/LTX2_audio_vae_bf16.safetensors" "/comfyui/models/checkpoints/LTX2_audio_vae_bf16.safetensors"
-
     echo "Model symlinks created."
 fi
 
 # ── Step 3: Start the original ComfyUI worker ──
+echo "Starting ComfyUI worker..."
 exec /start.sh
