@@ -19,12 +19,10 @@ RUN pip uninstall -y flash-attn flash_attn 2>/dev/null; \
     Pillow \
     numpy
 
-# Download GGUF models via curl
+# Download only T2V GGUF (8.6GB) to keep image small for fast cold start
 RUN mkdir -p /app/models && \
     curl -L -o /app/models/wan2.1-t2v-14b-Q4_K_S.gguf \
       "https://huggingface.co/city96/Wan2.1-T2V-14B-gguf/resolve/main/wan2.1-t2v-14b-Q4_K_S.gguf" && \
-    curl -L -o /app/models/wan2.1-i2v-14b-480p-Q4_K_S.gguf \
-      "https://huggingface.co/city96/Wan2.1-I2V-14B-480P-gguf/resolve/main/wan2.1-i2v-14b-480p-Q4_K_S.gguf" && \
     ls -lh /app/models/*.gguf
 
 # Copy handler
