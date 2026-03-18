@@ -18,11 +18,12 @@ RUN pip install --no-cache-dir \
     Pillow \
     numpy
 
-# Download GGUF models directly during build (GitHub Actions has enough disk)
-RUN pip install --no-cache-dir huggingface_hub && \
-    mkdir -p /app/models && \
-    python -c "from huggingface_hub import hf_hub_download; hf_hub_download('city96/Wan2.1-T2V-14B-gguf', filename='wan2.1-t2v-14b-Q4_K_S.gguf', local_dir='/app/models')" && \
-    python -c "from huggingface_hub import hf_hub_download; hf_hub_download('city96/Wan2.1-I2V-14B-480P-gguf', filename='wan2.1-i2v-14b-480p-Q4_K_S.gguf', local_dir='/app/models')" && \
+# Download GGUF models via curl (faster, no Python overhead)
+RUN mkdir -p /app/models && \
+    curl -L -o /app/models/wan2.1-t2v-14b-Q4_K_S.gguf \
+      "https://huggingface.co/city96/Wan2.1-T2V-14B-gguf/resolve/main/wan2.1-t2v-14b-Q4_K_S.gguf" && \
+    curl -L -o /app/models/wan2.1-i2v-14b-480p-Q4_K_S.gguf \
+      "https://huggingface.co/city96/Wan2.1-I2V-14B-480P-gguf/resolve/main/wan2.1-i2v-14b-480p-Q4_K_S.gguf" && \
     ls -lh /app/models/*.gguf
 
 # Copy handler

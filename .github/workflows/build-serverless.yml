@@ -48,5 +48,4 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ai-studio-v2
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-serverless
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          no-cache: true
