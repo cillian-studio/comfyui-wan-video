@@ -26,7 +26,9 @@ RUN pip install --no-cache-dir \
     imageio-ffmpeg \
     huggingface_hub \
     Pillow \
-    numpy
+    numpy \
+    soundfile \
+    qwen-omni-utils
 
 RUN mkdir -p /tmp/models
 

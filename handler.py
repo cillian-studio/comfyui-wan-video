@@ -198,6 +198,60 @@ def generate_cogvideo(params):
     return _export_video(output.frames[0], "cogvideo", 8)
 
 
+# ── Qwen2.5-Omni TTS ──
+
+def load_qwen_tts():
+    if "qwen_tts" in loaded_models:
+        return loaded_models["qwen_tts"]
+    from transformers import Qwen2_5OmniForConditionalGeneration, Qwen2_5OmniProcessor
+    print("Loading Qwen2.5-Omni-7B for TTS...", flush=True)
+    model = Qwen2_5OmniForConditionalGeneration.from_pretrained(
+        "Qwen/Qwen2.5-Omni-7B", torch_dtype="auto", device_map="auto",
+    )
+    processor = Qwen2_5OmniProcessor.from_pretrained("Qwen/Qwen2.5-Omni-7B")
+    loaded_models["qwen_tts"] = (model, processor)
+    print("Qwen2.5-Omni loaded.", flush=True)
+    return model, processor
+
+
+def generate_qwen_tts(params):
+    model, processor = load_qwen_tts()
+    import soundfile as sf
+    import numpy as np
+
+    text = params.get("text", params.get("prompt", ""))
+    speaker = params.get("voice", params.get("speaker", "Chelsie"))
+    # Voices: Chelsie (female, sweet), Ethan (male, energetic), Cherry, Serena
+
+    conversation = [
+        {"role": "system", "content": [{"type": "text", "text": "You are a professional voice actor. Read the following text naturally and expressively."}]},
+        {"role": "user", "content": [{"type": "text", "text": text}]},
+    ]
+
+    text_input = processor.apply_chat_template(conversation, add_generation_prompt=True, tokenize=False)
+    inputs = processor(text=text_input, return_tensors="pt", padding=True)
+    inputs = inputs.to(model.device).to(model.dtype)
+
+    text_ids, audio = model.generate(**inputs, use_audio_in_video=False, speaker=speaker)
+
+    response_text = processor.batch_decode(text_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
+
+    result = {"text": response_text}
+
+    if audio is not None:
+        os.makedirs(OUTPUT_PATH, exist_ok=True)
+        wav_path = os.path.join(OUTPUT_PATH, f"qwen_tts_{int(time.time())}.wav")
+        audio_np = audio.reshape(-1).detach().cpu().numpy()
+        sf.write(wav_path, audio_np, samplerate=24000)
+        with open(wav_path, "rb") as f:
+            result["audio"] = base64.b64encode(f.read()).decode("utf-8")
+        result["audio_format"] = "wav"
+        result["sample_rate"] = 24000
+        os.remove(wav_path)
+
+    return result
+
+
 # ── Helpers ──
 
 def _export_video(frames, prefix, fps):
@@ -231,6 +285,8 @@ def handler(event):
             return generate_ltx(params)
         elif model in ("cogvideo", "cogvideox", "cogvideo-t2v"):
             return generate_cogvideo(params)
+        elif model in ("qwen-tts", "qwen", "tts"):
+            return generate_qwen_tts(params)
         elif model == "health":
             t2v = os.path.exists(os.path.join(MODEL_PATH, GGUF_FILES["t2v"]))
             i2v = os.path.exists(os.path.join(MODEL_PATH, GGUF_FILES["i2v"]))
@@ -241,12 +297,13 @@ def handler(event):
                     "wan-i2v": {"on_disk": i2v, "loaded": "wan_i2v" in loaded_models},
                     "ltx": {"loaded": "ltx" in loaded_models},
                     "cogvideo": {"loaded": "cogvideo" in loaded_models},
+                    "qwen-tts": {"loaded": "qwen_tts" in loaded_models},
                 },
                 "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "none",
                 "vram_gb": round(torch.cuda.get_device_properties(0).total_memory / 1e9, 1) if torch.cuda.is_available() else 0,
             }
         else:
-            return {"error": f"Unknown model: {model}. Available: wan-t2v, wan-i2v, ltx, cogvideo, health"}
+            return {"error": f"Unknown model: {model}. Available: wan-t2v, wan-i2v, ltx, cogvideo, qwen-tts, health"}
 
     except Exception as e:
         import traceback
