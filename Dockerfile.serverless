@@ -20,8 +20,10 @@ RUN pip uninstall -y flash-attn flash_attn 2>/dev/null; \
     Pillow \
     numpy
 
+# Remove flash-attn AFTER install (conflicts with diffusers autoencoder_kl_wan)
+RUN pip uninstall -y flash-attn flash_attn 2>/dev/null; true
+
 # No models baked in - downloaded on first start to /tmp/models
-# This keeps the image small (~7GB) for fast cold start
 RUN mkdir -p /tmp/models
 
 # Copy handler
