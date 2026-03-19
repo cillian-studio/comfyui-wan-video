@@ -1,7 +1,7 @@
 """
 RunPod Serverless Handler — AI Studio
 Models: Wan 2.1 14B GGUF Q4_K_S (T2V + I2V)
-Baked into Docker image at /app/models/
+Downloaded on first request, cached in /tmp/models/
 """
 
 import runpod
@@ -10,10 +10,33 @@ import os
 import base64
 import time
 
-MODEL_PATH = "/app/models"
+MODEL_PATH = "/tmp/models"
 OUTPUT_PATH = "/tmp/outputs"
 
 loaded_models = {}
+
+GGUF_URLS = {
+    "t2v": "https://huggingface.co/city96/Wan2.1-T2V-14B-gguf/resolve/main/wan2.1-t2v-14b-Q4_K_S.gguf",
+    "i2v": "https://huggingface.co/city96/Wan2.1-I2V-14B-480P-gguf/resolve/main/wan2.1-i2v-14b-480p-Q4_K_S.gguf",
+}
+
+GGUF_FILES = {
+    "t2v": "wan2.1-t2v-14b-Q4_K_S.gguf",
+    "i2v": "wan2.1-i2v-14b-480p-Q4_K_S.gguf",
+}
+
+
+def ensure_model(model_key):
+    """Download GGUF model if not already cached."""
+    os.makedirs(MODEL_PATH, exist_ok=True)
+    path = os.path.join(MODEL_PATH, GGUF_FILES[model_key])
+    if not os.path.exists(path):
+        url = GGUF_URLS[model_key]
+        print(f"Downloading {GGUF_FILES[model_key]}...", flush=True)
+        import subprocess
+        subprocess.run(["curl", "-L", "-o", path, url], check=True)
+        print(f"Downloaded: {os.path.getsize(path)/1e9:.1f} GB", flush=True)
+    return path
 
 
 def load_wan_t2v():
@@ -23,8 +46,8 @@ def load_wan_t2v():
 
     from diffusers import WanPipeline, WanTransformer3DModel, GGUFQuantizationConfig
 
-    gguf_path = os.path.join(MODEL_PATH, "wan2.1-t2v-14b-Q4_K_S.gguf")
-    print(f"Loading Wan 2.1 T2V GGUF...", flush=True)
+    gguf_path = ensure_model("t2v")
+    print("Loading Wan 2.1 T2V GGUF...", flush=True)
 
     transformer = WanTransformer3DModel.from_single_file(
         gguf_path,
@@ -50,8 +73,8 @@ def load_wan_i2v():
 
     from diffusers import WanImageToVideoPipeline, WanTransformer3DModel, GGUFQuantizationConfig
 
-    gguf_path = os.path.join(MODEL_PATH, "wan2.1-i2v-14b-480p-Q4_K_S.gguf")
-    print(f"Loading Wan 2.1 I2V GGUF...", flush=True)
+    gguf_path = ensure_model("i2v")
+    print("Loading Wan 2.1 I2V GGUF...", flush=True)
 
     transformer = WanTransformer3DModel.from_single_file(
         gguf_path,
@@ -133,7 +156,6 @@ def generate_i2v(params):
     guidance = params.get("guidance_scale", 5.0)
     seed = params.get("seed", -1)
 
-    # Load image from URL or base64
     if image_b64:
         import io
         from PIL import Image
@@ -196,8 +218,8 @@ def handler(event):
         elif model in ("wan-i2v", "i2v", "image-to-video"):
             return generate_i2v(params)
         elif model == "health":
-            t2v_exists = os.path.exists(os.path.join(MODEL_PATH, "wan2.1-t2v-14b-Q4_K_S.gguf"))
-            i2v_exists = os.path.exists(os.path.join(MODEL_PATH, "wan2.1-i2v-14b-480p-Q4_K_S.gguf"))
+            t2v_exists = os.path.exists(os.path.join(MODEL_PATH, GGUF_FILES["t2v"]))
+            i2v_exists = os.path.exists(os.path.join(MODEL_PATH, GGUF_FILES["i2v"]))
             return {
                 "status": "ok",
                 "models": {
